@@ -2,16 +2,17 @@ import math,numpy as np,time
 from typing import List, Sequence
 
 from src.dtype import Dtype
+from device import Devices,Device
 from src._buffer import Buffer
 from src.helpers import (
     get_shape,fully_flatten,
-    compute_strides,is_jagged,val_error)
+    compute_strides,is_jagged)
 from src.dtype import _Dtype
 
 class MathTrait:pass
 
 class Larik(MathTrait):
-  def __init__(self,data,dtype=Dtype.float32,device=None,**kwargs):
+  def __init__(self,data,dtype=Dtype.float32,device=Devices.CPU,**kwargs):
     self._dtype = _Dtype(dtype)
     if isinstance(data,(list,tuple,dict)):
       if kwargs.get("shape",False):
@@ -40,18 +41,17 @@ class Larik(MathTrait):
 
     else: raise NotImplementedError("alamak najisnyee datatype apa ni")
 
+    self.device = Device(device)
     self._buffer = _buffer
     self._shape = shape
     self._ndim = len(shape)
     self._size = size
     self._strides = strides
-    self.device = device
     self._is_contiguous = True
     self._offset = 0
   
   @property
-  def shape(self):
-    return self._shape
+  def shape(self): return self._shape
   
   @property
   def strides(self): return self._strides
@@ -120,8 +120,7 @@ class Larik(MathTrait):
 
   def __repr__(self) -> str: return str(self)
 
-  def __getitem__(self,idx):
-    return self._getitem(idx)
+  def __getitem__(self,idx): return self._getitem(idx)
 
   def _getitem(self,indices):
     if isinstance(indices,(list,tuple)):
@@ -130,8 +129,7 @@ class Larik(MathTrait):
     else: return self.data().tolist()[indices]
 
   def contiguous(self):
-    if self.is_contiguous:
-        return self
+    if self.is_contiguous: return self
 
     new_data = [None] * self.size
     idx = [0] * self.ndim   # posisi multidimensi sekarang
@@ -165,7 +163,7 @@ class Larik(MathTrait):
     size = math.prod(shape)
     data = [0] * size
     buff = Buffer(_Dtype(dtype),data,shape=shape)
-    lr = Larik(buff,dtype,shape=shape,device="")
+    lr = Larik(buff,dtype,shape=shape)
     return lr
   
   @staticmethod
@@ -173,7 +171,7 @@ class Larik(MathTrait):
     size = math.prod(shape)
     data = [1] * size
     buff = Buffer(_Dtype(dtype),data,shape=shape)
-    lr = Larik(buff,dtype,shape=shape,device="")
+    lr = Larik(buff,dtype,shape=shape)
     return lr
 
   # TODO: in future will make it
@@ -181,48 +179,49 @@ class Larik(MathTrait):
   def rand(*shape): 
     rn = np.random.rand(*shape).astype("float32")
     return Larik(rn,dtype="float32")
-  
-  def __add__(self):pass
-  def __mul__(self):pass
-  def __sub__(self):pass
-  def __div__(self):pass
+
+  def __iadd__(self,val): 
+    self.device.assign(self.size,val,"+",self.buffer(),self.dtype.name_c)
+    return self
+
+  def __isub__(self,val):
+    self.device.assign(self.size,val,"-",self.buffer(),self.dtype.name_c)
+    return self
+
+  def __imul__(self,val):
+    self.device.assign(self.size,val,"*",self.buffer(),self.dtype.name_c)
+    return self
+
+  def __idiv__(self,val):
+    self.device.assign(self.size,val,"/",self.buffer(),self.dtype.name_c)
+    return self
+
+  def _arithmatic(self,lr,out,op):
+    assert isinstance(lr,Larik), f"{lr} is not Larik"
+    assert self.size == lr.size, f"{self.size} != {lr.size}"
+    self.device.arithmatic(self.size,op,self.dtype,out.buffer(),self.buffer(),lr.buffer())
+
+  def __add__(self,lr):
+    out = self.zeros(*self.shape,dtype=self.dtype._dtype)
+    self._arithmatic(lr,out,"+")
+    return out
+
+  def __sub__(self,lr):
+    out = self.zeros(*self.shape,dtype=self.dtype._dtype)
+    self._arithmatic(lr,out,"-")
+    return out
+
+  def __mul__(self,lr):
+    out = self.zeros(*self.shape,dtype=self.dtype._dtype)
+    self._arithmatic(lr,out,"*")
+    return out
+
+  def __div__(self,lr):
+    out = self.zeros(*self.shape,dtype=self.dtype._dtype)
+    self._arithmatic(lr,out,"/")
+    return out
+
   def __matmul__(self):pass
-
-def contiguous(lr:Larik):
-    if lr._is_contiguous:
-        return lr
-
-    new_data = [None] * lr._size
-
-    # iterasi linear index (0..size-1)
-    for k in range(lr._size):
-        # ubah k jadi indeks multidimensi sesuai shape
-        idx = []
-        tmp = k
-        for dim in reversed(lr._shape):
-            tmp, rem = divmod(tmp, dim)
-            idx.append(rem)
-        idx = tuple(reversed(idx))
-
-        # hitung posisi di buffer lama
-        flat_idx = lr._offset + sum(i * s for i, s in zip(idx, lr._strides))
-        new_data[k] = lr.buffer().as_flatten()[flat_idx]
-
-    # buffer baru, sekarang contiguous
-    new_buf = Buffer(lr._dtype, new_data, device=lr.device, shape=lr._shape)
-
-    lra = Larik.__new__(Larik)
-    lra._buffer = new_buf
-    lra._dtype = lr._dtype
-    lra._shape = lr._shape
-    lra._ndim = lr._ndim
-    lra._size = lr._size
-    lra._strides = compute_strides(lr._shape)
-    lra._offset = 0
-    lra.device = lr.device
-    lra._is_contiguous = True
-    return lra
-
 
 
 # TODO: Memperbaiki contiguous dan viewer
@@ -230,6 +229,7 @@ if __name__ == "__main__":
   import numpy as np
   np.random.seed(42)
   np_arr = np.random.randint(2,100,(100,50)).astype(np.int32)
-  print(Larik.ones(10,10,dtype=Dtype.int32).numpy())
-
-
+  my_arr = Larik.ones(1024,1024,dtype=Dtype.float32)
+  my_arr1 = Larik.ones(1024,1024,dtype=Dtype.float32)
+  my_arr_o = my_arr * my_arr1
+  print(my_arr_o.numpy())

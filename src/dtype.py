@@ -50,6 +50,9 @@ class _Dtype:
   def name(self): return DTYPE_NAMES[self._dtype.value]
 
   @property
+  def name_c(self): return DTYPE_NAMES_C[self._dtype.value]
+
+  @property
   def base_ptr_ir(self):
     from llvmlite import ir
     return ir.IntType(8)

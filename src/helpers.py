@@ -1,5 +1,7 @@
 from typing import Optional, Sequence,Union,TypeGuard,Any
-import ctypes,struct,math
+import ctypes,struct,math,platform,time
+
+OSX = platform.system() == "Darwin"
 
 def colored(st, color:Optional[str], background=False): return f"\u001b[{10*background+60*(color.upper() == color)+30+['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'].index(color.lower())}m{st}\u001b[0m" if color is not None else st  # replace the termcolor library with one line  # noqa: E501
 class Colors:
@@ -84,6 +86,8 @@ def truncate_bf16(x):
   bf = struct.unpack('f', struct.pack('I', f32_int & 0xFFFF0000))[0]
   return bf
 
-def val_error(msg): raise ValueError(msg)
-
+def cpu_time_execution(cb, enable):
+  if enable: st = time.perf_counter()
+  cb()
+  if enable: return time.perf_counter()-st
 

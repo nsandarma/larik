@@ -9,8 +9,7 @@ if sys.platform == 'win32':
   # winget also doesn't have something like `brew --prefix llvm` so just hardcode default installation path with an option to override
   LLVM_PATH = getenv('LLVM_PATH', 'C:\\Program Files\\LLVM\\bin\\LLVM-C.dll')
   if not os.path.exists(LLVM_PATH):
-    raise FileNotFoundError(
-        'LLVM not found, you can install it with `winget install LLVM.LLVM` or point at a custom dll with LLVM_PATH')
+    raise FileNotFoundError('LLVM not found, you can install it with `winget install LLVM.LLVM` or point at a custom dll with LLVM_PATH')
 elif sys.platform == "darwin":
   # Will raise FileNotFoundError if brew is not installed
   # `brew --prefix` will return even if formula is not installed

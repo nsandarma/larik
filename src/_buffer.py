@@ -1,5 +1,6 @@
-import ctypes,struct,numpy as np
+import ctypes,struct,numpy as np,math
 from src.dtype import _Dtype
+
 
 class Buffer:
   def __init__(self,dtype:_Dtype,data,shape,device=None):
@@ -17,9 +18,12 @@ class Buffer:
 
   def as_ctypes(self): return (ctypes.c_uint8 * self.as_buffer().nbytes).from_buffer(self._packed)
 
-  def as_flatten(self) -> list : return memoryview(self._packed).cast(self.dtype.fmtstr)
+  # follow data type , not raw buffer
+  def as_ctypes_(self): return (self._dtype.to_cty * math.prod(self.shape)).from_buffer(self._packed)
 
   def data_as(self,obj): return ctypes.cast(self.as_ctypes(),obj)
+
+  def as_flatten(self) -> list : return memoryview(self._packed).cast(self.dtype.fmtstr)
   
   @property
   def nbytes(self): return self.as_buffer().nbytes
